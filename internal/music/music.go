@@ -199,6 +199,9 @@ type Browse struct {
 // Section is a heading over what it lists. A section may hold several kinds,
 // shown in the order of the fields.
 type Section struct {
+	// ID names the section among its page's, for the sidebar to open its
+	// songs' page by, as NavItem.Section does, wherever on the page it moves.
+	ID        string     `json:"id,omitempty"`
 	Title     string     `json:"title,omitempty"`
 	Tracks    []Track    `json:"tracks,omitempty"`
 	Albums    []Album    `json:"albums,omitempty"`
@@ -230,10 +233,14 @@ type Link struct {
 }
 
 // NavItem is an entry of the sidebar: a Browse page of the source's own, by
-// Page, or one of the app's, by Builtin.
+// Page, the page of the songs of a section of its Home, by Section, or one of
+// the app's, by Builtin.
 type NavItem struct {
 	Title string `json:"title"`
 	Page  string `json:"page,omitempty"`
+	// Section is the ID of a section of the source's Home, whose songs' page
+	// it opens, as the feature card does, even before Home has loaded.
+	Section string `json:"section,omitempty"`
 	// Builtin is home, liked, savedAlbums, stations or shows. One the source
 	// can't do doesn't show.
 	Builtin string `json:"builtin,omitempty"`

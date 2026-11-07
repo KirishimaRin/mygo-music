@@ -94,7 +94,7 @@ export function home() {
   return {
     title: host.setting("greeting") || t("Welcome"),
     sections: [
-      { title: t("Picked for you"), tracks, morePage: "discover" },
+      { id: "picks", title: t("Picked for you"), tracks },
       { title: t("Albums"), albums: [album] },
       { title: t("Listen"), shows: [show], stations: [station] },
       { title: t("Explore"), links: [{ title: t("Discover"), subtitle: t("A page of the plugin's own"), page: "discover" }] },

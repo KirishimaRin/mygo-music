@@ -45,9 +45,13 @@ type route struct {
 	id string
 	// query and kind are what a search page searched for. On a section's page
 	// (pageSection), id is the browse page it's of, "" for Home, and query
-	// which of its sections.
+	// which of its sections, unless section names it by its ID.
 	query string
 	kind  music.SearchKind
+	// section is the ID of the section a section's page shows: the same
+	// wherever on its page the source moves it, and whether the sidebar or
+	// the feature card opened it.
+	section string
 }
 
 // app is the state both windows show. Everything in it is read and changed
