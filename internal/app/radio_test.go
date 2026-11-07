@@ -254,6 +254,13 @@ func TestLeaveStandaloneStation(t *testing.T) {
 	a.pl.AttachRadio(radioName("fake", &a.stations[2]), func(func([]music.Track)) {})
 	tt := ui.NewTester(a.view, 1200, 900)
 	settled(tt)
+	// Paused on the station, the banner offered "Playing", as if it were.
+	if _, ok := tt.Find("Playing"); ok {
+		t.Error("the paused banner says it's playing")
+	}
+	if _, ok := tt.Find("Resume"); !ok {
+		t.Error("the paused banner doesn't offer to resume")
+	}
 	if err := tt.Click("Leave Heart Mode"); err != nil {
 		t.Fatal(err)
 	}
