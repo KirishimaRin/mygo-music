@@ -175,8 +175,14 @@ func (a *app) load(r route) {
 	case pageBrowse:
 		a.loadBrowse(lib, r.id, false)
 	case pageSection:
-		if r.id != "" {
+		switch {
+		case r.id != "":
 			a.loadBrowse(lib, r.id, false)
+		case !lib.homeLoading && (lib.homeAt.IsZero() || lib.homeErr != ""):
+			// Opened from the sidebar, before Home came or after it failed.
+			a.loadHome(lib)
+		default:
+			a.freshenHome()
 		}
 	}
 }
@@ -244,7 +250,7 @@ func (a *app) sidebar(c *ui.Context) {
 
 func (a *app) navItem(c *ui.Context, icon *ui.SVG, label string, r route) {
 	p := a.pal
-	selected := a.route.page == r.page && !a.nowPlaying && (r.page != pageBrowse || a.route.id == r.id)
+	selected := a.navSelected(r)
 	b := ui.ButtonBase(c.Key(label)).Height(34).PaddingX(10).Gap(10).Radius(8).AlignItems(ui.Center).Justify(ui.Start).FocusRing(false)
 	bg := ui.Transparent
 	switch {
@@ -265,6 +271,21 @@ func (a *app) navItem(c *ui.Context, icon *ui.SVG, label string, r route) {
 	if b.Clicked() {
 		a.open(r)
 	}
+}
+
+// navSelected reports whether the page open is the one an entry of the sidebar
+// opens, however it was opened.
+func (a *app) navSelected(r route) bool {
+	if a.nowPlaying || a.route.page != r.page {
+		return false
+	}
+	switch r.page {
+	case pageBrowse:
+		return a.route.id == r.id
+	case pageSection:
+		return a.route.id == r.id && a.route.section == r.section
+	}
+	return true
 }
 
 // clearSearch empties the field and forgets the search last shown, which
@@ -615,7 +636,12 @@ func (a *app) sidebarItems() []sidebarItem {
 	}
 	for _, n := range nav {
 		if n.Builtin == "" {
-			if a.can("browse") {
+			switch {
+			case n.Section != "":
+				if a.can("home") {
+					items = append(items, sidebarItem{navIcon(n.Icon), n.Title, route{page: pageSection, section: n.Section}})
+				}
+			case a.can("browse"):
 				items = append(items, sidebarItem{navIcon(n.Icon), n.Title, route{page: pageBrowse, id: n.Page}})
 			}
 			continue

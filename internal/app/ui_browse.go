@@ -271,7 +271,8 @@ func (a *app) cardRow(c *ui.Context, sec *music.Section, r browseRow, cols int) 
 	})
 }
 
-// sectionOf finds the section a section's page shows.
+// sectionOf finds the section a section's page shows: by its ID, if the
+// route names one, else by where it is on its page.
 func (a *app) sectionOf(r route) *music.Section {
 	page := a.library.home
 	if r.id != "" {
@@ -279,8 +280,19 @@ func (a *app) sectionOf(r route) *music.Section {
 			page = d.page
 		}
 	}
+	if page == nil {
+		return nil
+	}
+	if r.section != "" {
+		for i := range page.Sections {
+			if page.Sections[i].ID == r.section {
+				return &page.Sections[i]
+			}
+		}
+		return nil
+	}
 	at, err := strconv.Atoi(r.query)
-	if page == nil || err != nil || at < 0 || at >= len(page.Sections) {
+	if err != nil || at < 0 || at >= len(page.Sections) {
 		return nil
 	}
 	return &page.Sections[at]
@@ -288,11 +300,24 @@ func (a *app) sectionOf(r route) *music.Section {
 
 // sectionPage lists the tracks of a section the feature card shows only a few
 // of. It's headed as the card is: the day over the first cover's colors, and
-// the day's date over the title.
+// the day's date over the title. Opened from the sidebar before Home has
+// come, it waits for it.
 func (a *app) sectionPage(c *ui.Context) {
+	lib := a.library
 	sec := a.sectionOf(a.route)
 	if sec == nil {
-		a.centered(c, T("This page is gone"), nil)
+		home := a.route.id == ""
+		switch {
+		case home && (lib.homeLoading || !lib.started || lib.accountUnknown()):
+			s := a.pageShimmer(c)
+			a.trackSkeleton(c, s, true, func(c *ui.Context) { a.playlistHeaderSkeleton(c, s) })
+		case home && lib.homeErr != "":
+			a.centered(c, lib.homeErr, func() { a.loadHome(lib) })
+		case lib.signedOut():
+			a.emptyHome(c)
+		default:
+			a.centered(c, T("This page is gone"), nil)
+		}
 		return
 	}
 	p := a.pal

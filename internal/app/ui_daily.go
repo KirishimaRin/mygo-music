@@ -109,9 +109,12 @@ func (a *app) featureCard(c *ui.Context, sec *music.Section, pageID string, at i
 		})
 	})
 	if card.Clicked() {
-		if sec.MorePage != "" {
+		switch {
+		case sec.MorePage != "":
 			a.open(route{page: pageBrowse, id: sec.MorePage})
-		} else {
+		case sec.ID != "":
+			a.open(route{page: pageSection, id: pageID, section: sec.ID})
+		default:
 			a.open(route{page: pageSection, id: pageID, query: strconv.Itoa(at)})
 		}
 	}

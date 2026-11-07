@@ -14,6 +14,7 @@
   ],
   "navigation": [
     { "builtin": "home" },
+    { "title": "Picked for you", "section": "picks", "icon": "calendar" },
     { "title": "Discover", "page": "discover", "icon": "star" },
     { "builtin": "liked" },
     { "builtin": "savedAlbums" },
