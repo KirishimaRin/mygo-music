@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"mygo-music/internal/music"
 )
@@ -30,7 +31,7 @@ func TestDemoPluginDoesEverything(t *testing.T) {
 		}
 	}
 	for _, name := range []string{
-		"signIn", "signOut", "account", "setSetting", "home", "browse", "search", "suggest", "recent", "played",
+		"signIn", "signOut", "account", "setSetting", "home", "browse", "search", "suggest", "recent", "played", "playEnded",
 		"liked", "isLiked", "like", "likeEpisode", "album", "artist", "saveAlbum", "savedAlbums", "followArtist", "playlists",
 		"playlist", "createPlaylist", "renamePlaylist", "deletePlaylist", "addToPlaylist", "removeFromPlaylist",
 		"movePlaylistTrack", "savePlaylist", "shows", "show", "subscribeShow", "stations", "stationNext", "comments",
@@ -83,6 +84,7 @@ func TestDemoPluginDoesEverything(t *testing.T) {
 		t.Errorf("recent: %v, %v", r, err)
 	}
 	p.Played(music.Track{ID: "t1"})
+	p.PlayEnded(music.Track{ID: "t1"}, 42*time.Second, music.EndFinished)
 
 	must("saveAlbum", p.SaveAlbum("al1", true))
 	if al, err := p.Album("al1"); err != nil || !al.Album.Saved || len(al.Tracks) != 3 {

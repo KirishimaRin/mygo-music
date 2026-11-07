@@ -78,6 +78,7 @@ Export a function for each thing the plugin does. Each takes one object of param
 | `suggest` | `{query}` | `[string]` |
 | `recent` | | `[Track]` |
 | `played` | `{id}` | |
+| `playEnded` | `{id, seconds, reason}`, where `reason` is `ended`, `skipped`, `stopped` or `quit` | |
 | `liked` | `{offset}` | `{tracks, more}` |
 | `isLiked` | `{ids}` | `{id: bool}` |
 | `like`, `likeEpisode` | `{id, on}` | `like` likes a song, and `likeEpisode` an episode: without it, episodes show no heart |
@@ -130,6 +131,8 @@ Put the translations in `locales/<language>.json` next to `plugin.json`: `locale
 The app translates the plugin's `name`, its settings' `label` and `help` and its `navigation` titles with them. For what the plugin says itself, such as a page's titles or an error's message, `host.t(text)` answers the translation, or `text` when there's none, and `host.language()` the listener's language, `en` or `zh-CN`. Both follow the listener as they change it, and the page they're on loads again.
 
 With `"playback": "stream"`, the app plays what `stream` answers. With `"playback": "remote"`, the plugin makes the sound itself, or has another program do so, and the app calls the `remote` functions and polls `remoteState`.
+
+`played` is called once as each play of a song starts, and `playEnded` once as it ends: `seconds` is how much of it was heard, without the time it was paused or waited for its audio, or what a seek jumped over, and with what a seek back played again. `reason` is `ended` once it played to its end, `skipped` once something else plays, or the same song again, `stopped` once a remote plugin's song stopped at the other end, and `quit` as the app quits, which waits up to two seconds for the plugin to answer. Played again, a song is a new play, counted from nothing. A remote plugin's position is the app's guess from the clock and `remoteState`, so its `seconds` are only as close as that.
 
 Throw an error with a `code` to say what's wrong: `signIn` prompts the listener to sign in, `setup` sends them to the plugin's settings, `unavailable` means this can't be played, and `unsupported` means the plugin doesn't do this. Any other error shows its message.
 

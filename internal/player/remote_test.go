@@ -80,6 +80,21 @@ type remoteFake struct {
 	from     []int64
 	asks     int
 	cmd      chan string
+	// ends hears each play that ended, if set: else it doesn't want to know.
+	ends chan ending
+}
+
+// ending is how a play ended, as its source heard.
+type ending struct {
+	id    string
+	heard time.Duration
+	why   music.EndReason
+}
+
+func (s *remoteFake) Can(what string) bool { return what == "playEnded" && s.ends != nil }
+
+func (s *remoteFake) PlayEnded(t music.Track, heard time.Duration, why music.EndReason) {
+	s.ends <- ending{t.ID, heard, why}
 }
 
 func (s *remoteFake) Info() music.Info {
@@ -138,7 +153,12 @@ type remoteRig struct {
 }
 
 func newRemoteRig(t *testing.T, n int) *remoteRig {
-	r := &remoteRig{t: t, src: &remoteFake{cmd: make(chan string, 64)}, posted: make(chan func(), 64), quiet: make(chan func(), 64), now: time.Unix(1000, 0)}
+	return newRemoteRigOf(t, n, &remoteFake{cmd: make(chan string, 64)})
+}
+
+// newRemoteRigOf is newRemoteRig, with src the source.
+func newRemoteRigOf(t *testing.T, n int, src *remoteFake) *remoteRig {
+	r := &remoteRig{t: t, src: src, posted: make(chan func(), 64), quiet: make(chan func(), 64), now: time.Unix(1000, 0)}
 	r.p = New(func(fn func()) { r.posted <- fn })
 	r.p.Quiet = func(fn func()) { r.quiet <- fn }
 	r.p.Source = func(id string) music.Source {

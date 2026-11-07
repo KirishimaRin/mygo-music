@@ -376,6 +376,24 @@ type Recorder interface {
 	Played(track Track)
 }
 
+// A PlayEnder is a source that wants to know, as each play of a track ends,
+// how much of it was heard and why it ended: Can("playEnded") says whether it
+// does. What's heard is what played, without the pauses, the waits for bytes
+// or what a seek jumped over, and again what a seek back played again.
+type PlayEnder interface {
+	PlayEnded(track Track, heard time.Duration, why EndReason)
+}
+
+// EndReason is why a play of a track ended.
+type EndReason string
+
+const (
+	EndFinished EndReason = "ended"   // it played to its end
+	EndSkipped  EndReason = "skipped" // something else was played, or it again
+	EndStopped  EndReason = "stopped" // it stopped at the other end, playing remotely
+	EndQuit     EndReason = "quit"    // the app quit
+)
+
 // Source is where music comes from. Everything but Info and Can may take a
 // while and is called off the main thread. A source that doesn't do something
 // answers ErrUnsupported, and Can says so beforehand for the views to leave it
