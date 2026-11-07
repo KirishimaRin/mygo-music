@@ -146,13 +146,11 @@ func (a *app) stationsPage(c *ui.Context) {
 	ui.Scroll(c.Key(a.route)).TrackScroll(&a.pageScroll).Grow(1).Padding(top+pageGap, pagePad, bottom+48, pagePad).ScrollbarInsets(top, 0, bottom, 0).Children(func() {
 		a.startMark(c)
 		defer a.endMark(c)
-		// A few stations are ways of one radio, chosen with a switch by the heading;
-		// more are a grid of their own under the card.
-		few := len(lib.stations) > 1 && len(lib.stations) <= maxSwitchedStations
+		switched, cards, banners := stationGroups(lib.stations)
 		ui.Row(c).AlignItems(ui.End).Children(func() {
 			ui.Box(c).Grow(1).Shrink(1).MinWidth(0).Children(func() { a.heading(c, a.builtinTitle("stations"), T("Music without end")) })
-			if few {
-				a.stationSwitch(c, lib)
+			if len(switched) > 1 {
+				a.stationSwitch(c, lib, switched)
 			}
 		})
 		if !lib.stationsOnce {
@@ -164,13 +162,16 @@ func (a *app) stationsPage(c *ui.Context) {
 			return
 		}
 		a.radioCard(c, lib)
-		if len(lib.stations) <= maxSwitchedStations {
+		for _, st := range banners {
+			a.stationBanner(c.Key("banner-"+st.ID), lib, st)
+		}
+		if len(cards) == 0 {
 			return
 		}
 		a.section(c, T("Stations"))
 		ui.Grid(c).Columns(a.columns(c, 156)).GapX(20).GapY(28).Children(func() {
-			for i := range lib.stations {
-				a.stationCard(c.Key(lib.stations[i].ID), &lib.stations[i])
+			for _, st := range cards {
+				a.stationCard(c.Key(st.ID), st)
 			}
 		})
 	})
@@ -179,12 +180,43 @@ func (a *app) stationsPage(c *ui.Context) {
 // maxSwitchedStations is how many stations fit a switch.
 const maxSwitchedStations = 4
 
+// stationGroups parts a source's stations into the few that are ways of one
+// radio, chosen with a switch by the heading, or the cards of a grid once
+// there are too many for a switch, and the standalone ones, each a banner of
+// its own under the radio's card.
+func stationGroups(stations []music.Station) (switched, cards, banners []*music.Station) {
+	for i := range stations {
+		if stations[i].Standalone {
+			banners = append(banners, &stations[i])
+		} else {
+			switched = append(switched, &stations[i])
+		}
+	}
+	if len(switched) > maxSwitchedStations {
+		return nil, switched, banners
+	}
+	return switched, nil, banners
+}
+
+// chosenStation is what the radio's card starts: the way its switch has
+// chosen, or the first station not standalone without one.
+func (a *app) chosenStation(lib *library) *music.Station {
+	switched, cards, _ := stationGroups(lib.stations)
+	switch {
+	case len(switched) > 0:
+		return switched[min(a.stationAt, len(switched)-1)]
+	case len(cards) > 0:
+		return cards[0]
+	}
+	return &lib.stations[0]
+}
+
 // stationSwitch chooses among a few stations. It shows the one playing, and
 // playing one, choosing another changes to it at once.
-func (a *app) stationSwitch(c *ui.Context, lib *library) {
+func (a *app) stationSwitch(c *ui.Context, lib *library, stations []*music.Station) {
 	src, playing, _ := radioParts(a.pl.Radio())
-	labels := make([]string, len(lib.stations))
-	for i, st := range lib.stations {
+	labels := make([]string, len(stations))
+	for i, st := range stations {
 		labels[i] = st.Name
 		if src == lib.id && st.ID == playing {
 			a.stationAt = i
@@ -196,7 +228,7 @@ func (a *app) stationSwitch(c *ui.Context, lib *library) {
 		if segmented(c.Key("station"), &at, labels...) {
 			a.stationAt = at
 			if src == lib.id {
-				a.playStation(lib, &lib.stations[at])
+				a.playStation(lib, stations[at])
 			}
 		}
 	})
@@ -208,6 +240,63 @@ func (a *app) stationCard(c *ui.Context, st *music.Station) {
 	if a.coverCardWith(c, st.Name, st.ImageURL, iconRadio, st.Description, func() { a.playStation(lib, st) }) {
 		a.playStation(lib, st)
 	}
+}
+
+// stationBanner is a standalone station the width of the page, under its name
+// when it has a headline of its own: its icon or picture, what it is, and what
+// starts it, or, while it plays, what leaves it.
+func (a *app) stationBanner(c *ui.Context, lib *library, st *music.Station) {
+	p := a.pal
+	src, playing, _ := radioParts(a.pl.Radio())
+	on := src == lib.id && playing == st.ID
+	starting := a.radioStarting == radioName(lib.id, st)
+	title := st.Name
+	if st.Headline != "" {
+		a.section(c, st.Name)
+		title = st.Headline
+	}
+	tile := ui.LinearGradient{Angle: 135, Oklab: true, From: ui.Oklch(0.62, 0.02, 280), To: ui.Oklch(0.45, 0.02, 280)}
+	primary, onPrimary := p.text, p.bg
+	if st.Icon == "heart" {
+		tile = ui.LinearGradient{Angle: 135, Oklab: true, From: ui.Oklch(0.78, 0.14, 0), To: ui.Oklch(0.6, 0.22, 15)}
+		primary, onPrimary = ui.Oklch(0.6, 0.21, 24), ui.Hex("#ffffff")
+	}
+	margin := float32(20)
+	if st.Headline != "" {
+		margin = 0
+	}
+	ui.Row(c).Margin(margin, 0, 0, 0).Padding(18, 24, 18, 18).Gap(18).AlignItems(ui.Center).Radius(20).Background(p.sidebar).Children(func() {
+		ui.Box(c).Size(64, 64).Shrink(0).Radius(16).LinearGradient(tile).Center().Children(func() {
+			if st.ImageURL != "" {
+				a.coverFill(c, st.ImageURL, 200, 16)
+				return
+			}
+			ui.Icon(c, navIcon(st.Icon)).Size(30, 30).TextColor(ui.Hex("#ffffff"))
+		})
+		ui.Column(c).Grow(1).Shrink(1).MinWidth(0).Gap(4).Children(func() {
+			ui.Text(c, title).FontSize(17).FontWeight(700).SingleLine()
+			if st.Description != "" {
+				ui.Text(c, st.Description).FontSize(13).TextColor(p.muted).MaxLines(2)
+			}
+		})
+		ui.Row(c).Shrink(0).Gap(10).AlignItems(ui.Center).Children(func() {
+			if on {
+				if pillButton(c.Key("leave"), nil, Tf("Leave %s", st.Name), p.bg, p.text).Clicked() {
+					a.exitRadio()
+				}
+			}
+			icon, label := iconPlay, T("Start Playing")
+			switch {
+			case starting:
+				icon, label = nil, T("Tuning in…")
+			case on:
+				icon, label = nil, T("Playing")
+			}
+			if pillButton(c.Key("play"), icon, label, primary, onPrimary).Clicked() {
+				a.playStation(lib, st)
+			}
+		})
+	})
 }
 
 // radioCard shows the song the station plays, or how to start the first.
@@ -240,7 +329,7 @@ func (a *app) radioCard(c *ui.Context, lib *library) {
 		ui.Row(c).Absolute().Top(0).Left(0).Right(0).Bottom(0).Padding(36, 40).Gap(40).AlignItems(ui.Center).Children(func() {
 			a.radioCovers(c, tr)
 			ui.Column(c).Grow(1).Shrink(1).MinWidth(0).Gap(8).Children(func() {
-				first := &lib.stations[min(a.stationAt, len(lib.stations)-1)]
+				first := a.chosenStation(lib)
 				label := first.Name
 				if onRadio {
 					label = radioLabel(pl.Radio())
