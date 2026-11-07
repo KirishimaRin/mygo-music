@@ -1,0 +1,134 @@
+# Builds this fork for macOS, Windows and Linux and publishes a release of it,
+# versioned after upstream's latest release with -addons after it, such as
+# 0.1.21-addons, then 0.1.21-addons.2 for a later commit on the same upstream
+# version. The apps update from this fork's releases, signed with the
+# fork's own key: MYGO_UPDATER_PRIVATE_KEY (a secret) and
+# MYGO_UPDATER_PUBLIC_KEY (a variable). mygo.config.ts stays as upstream has
+# it, so syncing upstream doesn't conflict: each job rewrites it for the
+# build. The Mac app is signed ad hoc and not notarized.
+name: Addons Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: addons-release
+
+jobs:
+  draft-release:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      base: ${{ steps.version.outputs.base }}
+    steps:
+      - uses: actions/checkout@v7
+      # A run again on the same commit builds its tag again.
+      - name: Find the version and tag it
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          base="$(gh release view --repo egoist/mygo-music --json tagName --jq .tagName)"
+          base="${base#v}"
+          version="$base-addons"
+          n=1
+          while sha="$(git ls-remote --tags origin "refs/tags/v$version" | cut -f1)"; [ -n "$sha" ] && [ "$sha" != "$GITHUB_SHA" ]; do
+            n=$((n + 1))
+            version="$base-addons.$n"
+          done
+          if [ -z "$sha" ]; then
+            git tag "v$version"
+            git push origin "refs/tags/v$version"
+          fi
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Create the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+          BASE: ${{ steps.version.outputs.base }}
+        run: |
+          if ! gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release create "v$VERSION" --repo "$GITHUB_REPOSITORY" \
+              --draft --verify-tag --title "v$VERSION" \
+              --notes "MyGo Music $BASE with this fork's additions: see [FORK.md](https://github.com/$GITHUB_REPOSITORY/blob/v$VERSION/FORK.md)."
+          fi
+
+  build:
+    needs: draft-release
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: macOS, os: macos-latest, platform: "darwin/arm64,darwin/amd64", flags: "-sign=- -skip-notarize" }
+          - { name: Windows, os: ubuntu-latest, platform: "windows/amd64,windows/arm64" }
+          - { name: Linux, os: ubuntu-latest, platform: "linux/amd64,linux/arm64" }
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: refs/tags/v${{ needs.draft-release.outputs.version }}
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Find Go's caches
+        id: go-env
+        run: |
+          echo "build=$(go env GOCACHE)" >> "$GITHUB_OUTPUT"
+          echo "mod=$(go env GOMODCACHE)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ${{ steps.go-env.outputs.build }}
+            ${{ steps.go-env.outputs.mod }}
+          key: addons-go-${{ matrix.name }}-${{ hashFiles('go.mod', 'go.sum') }}
+          restore-keys: addons-go-${{ matrix.name }}-
+      - name: Install NSIS, for the Windows installers
+        if: matrix.name == 'Windows'
+        run: sudo apt-get update && sudo apt-get install -y nsis
+      # The version, where updates come from and the key they're checked
+      # with, and the version's notes in CHANGELOG.md, which mygo build
+      # puts in the updates: upstream's notes of the version it's based on.
+      - name: Make the build this fork's
+        env:
+          VERSION: ${{ needs.draft-release.outputs.version }}
+          BASE: ${{ needs.draft-release.outputs.base }}
+          PUBLIC_KEY: ${{ vars.MYGO_UPDATER_PUBLIC_KEY }}
+        run: |
+          perl -0pi -e '
+            s/^(\s*version:\s*)"[^"]*"/$1"$ENV{VERSION}"/m or die "no version\n";
+            s/^(\s*github:\s*)"[^"]*"/$1"$ENV{GITHUB_REPOSITORY}"/m or die "no github\n";
+            s/^(\s*publicKey:\s*)"[^"]*"/$1"$ENV{PUBLIC_KEY}"/m or die "no publicKey\n";
+          ' mygo.config.ts
+          bun -e 'const c = (await import("./mygo.config.ts")).default({ command: "build" }); console.log(c.version, c.updates.github, c.updates.publicKey)'
+          {
+            echo "## [$VERSION]"
+            echo
+            echo "MyGo Music $BASE with this fork's additions: see FORK.md."
+            echo
+            awk -v v="$BASE" '/^## / { if (found) exit; found = index($0, "[" v "]") > 0; next } found' CHANGELOG.md
+          } > notes.md
+          awk '/^## / && !done { while ((getline line < "notes.md") > 0) print line; print ""; done = 1 } { print }' CHANGELOG.md > CHANGELOG.new
+          mv CHANGELOG.new CHANGELOG.md
+          head -n 12 CHANGELOG.md
+      - name: Build and upload
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MYGO_UPDATER_PRIVATE_KEY: ${{ secrets.MYGO_UPDATER_PRIVATE_KEY }}
+        run: go tool mygo build -platform "${{ matrix.platform }}" ${{ matrix.flags }} -upload
+
+  publish:
+    needs: [draft-release, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.draft-release.outputs.version }}
+        run: gh release edit "v$VERSION" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease=false --latest
