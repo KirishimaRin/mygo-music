@@ -289,8 +289,10 @@ func (a *app) stationBanner(c *ui.Context, lib *library, st *music.Station) {
 			switch {
 			case starting:
 				icon, label = nil, T("Tuning in…")
-			case on:
+			case on && a.pl.Playing():
 				icon, label = nil, T("Playing")
+			case on:
+				label = T("Resume")
 			}
 			if pillButton(c.Key("play"), icon, label, primary, onPrimary).Clicked() {
 				a.playStation(lib, st)
