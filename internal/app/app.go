@@ -422,6 +422,8 @@ func Run() error {
 		a.settings.Volume = a.volume
 		a.settings.save()
 		a.saveSession()
+		// The plugin playing hears how its last song went before it's closed.
+		a.pl.Quit()
 	})
 	// Windows leaves an icon in the notification area after its app until
 	// the pointer passes over it.
@@ -430,6 +432,12 @@ func Run() error {
 			a.tray.Destroy()
 		}
 		a.closeSources()
+	})
+	// Shutting down, Windows ends the app without OnBeforeQuit.
+	mygo.App.OnQuit(func() {
+		if a.pl != nil {
+			a.pl.Quit()
+		}
 	})
 	mygo.App.OnWindowAllClosed(func() {})
 	mygo.App.OnActivate(func(bool) { a.showMain() })

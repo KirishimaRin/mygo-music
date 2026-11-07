@@ -3,8 +3,10 @@ package plugin
 import (
 	"errors"
 	"log"
+	"math"
 	"net/url"
 	"strings"
+	"time"
 
 	"mygo-music/internal/music"
 )
@@ -272,6 +274,15 @@ func (p *Plugin) Played(t music.Track) {
 	}
 }
 
+// PlayEnded tells the plugin a play of a track ended, if it has "playEnded":
+// how many seconds of it were heard, and why it ended.
+func (p *Plugin) PlayEnded(t music.Track, heard time.Duration, why music.EndReason) {
+	params := map[string]any{"id": t.ID, "seconds": math.Round(heard.Seconds()*10) / 10, "reason": why}
+	if err := p.call("playEnded", params, nil); err != nil && !errors.Is(err, music.ErrUnsupported) {
+		log.Printf("plugin %s: playEnded: %v", p.manifest.ID, err)
+	}
+}
+
 func (p *Plugin) Lyrics(id string) (*music.Lyrics, error) {
 	var l music.Lyrics
 	if err := p.call("lyrics", map[string]string{"id": id}, &l); err != nil {
@@ -337,8 +348,9 @@ func (p *Plugin) RemoteUse(deviceID string) error {
 }
 
 var (
-	_ music.Source   = (*Plugin)(nil)
-	_ music.Recorder = (*Plugin)(nil)
+	_ music.Source    = (*Plugin)(nil)
+	_ music.Recorder  = (*Plugin)(nil)
+	_ music.PlayEnder = (*Plugin)(nil)
 )
 
 // hasHeader reports whether headers has name, in any case.

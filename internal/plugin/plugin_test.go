@@ -68,6 +68,21 @@ func load(t *testing.T, manifest, source string) *Plugin {
 
 const plain = `{"id":"x"}`
 
+// A play's end reaches the plugin as its ID, the seconds heard and why, by the
+// names the README gives them.
+func TestPlayEndedParams(t *testing.T) {
+	p := load(t, plain, `
+let last = "";
+export function playEnded({ id, seconds, reason }) { last = id + " " + seconds + " " + reason; }
+export function recent() { return [{ id: last }]; }
+`)
+	p.PlayEnded(music.Track{ID: "t1"}, 83250*time.Millisecond, music.EndSkipped)
+	got, err := p.Recent()
+	if err != nil || len(got) != 1 || got[0].ID != "t1 83.3 skipped" {
+		t.Errorf("the plugin heard %+v, %v", got, err)
+	}
+}
+
 // An export answers plainly or through a promise, and the tracks it answers
 // are of the plugin, whatever they say, as that's what they'll play through.
 func TestAnswersStampedWithThePlugin(t *testing.T) {

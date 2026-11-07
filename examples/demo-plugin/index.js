@@ -133,6 +133,9 @@ export function recent() {
 export function played({ id }) {
   console.log(`played ${id}`);
 }
+export function playEnded({ id, seconds, reason }) {
+  console.log(`heard ${seconds}s of ${id}: ${reason}`);
+}
 export function liked() {
   const ids = load("liked", []);
   return { tracks: ids.map(byId), more: false };
