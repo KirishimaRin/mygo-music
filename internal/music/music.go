@@ -163,6 +163,13 @@ type Station struct {
 	Name        string `json:"name"`
 	Description string `json:"description,omitempty"`
 	ImageURL    string `json:"imageUrl,omitempty"`
+	Standalone  bool   `json:"standalone,omitempty"` // a banner of its own on the stations page, not a way of the switch
+	// Headline is the banner's title, under the station's name; without it the
+	// banner is called by the name alone.
+	Headline string `json:"headline,omitempty"`
+	// Icon names one of the app's for the banner, as Navigation's do; a
+	// heart's banner is pink.
+	Icon string `json:"icon,omitempty"`
 }
 
 // Comment is what a listener said of a track.

@@ -182,3 +182,89 @@ func TestStationSwitch(t *testing.T) {
 	}
 	until(t, ch, func() bool { return a.pl.Radio() == radioName("fake", &a.stations[2]) })
 }
+
+// Stations a source calls standalone are banners of their own, and the rest go
+// by the rule as before: a few a switch, too many a grid.
+func TestStationGroups(t *testing.T) {
+	ids := func(sts []*music.Station) (out string) {
+		for _, st := range sts {
+			out += st.ID
+		}
+		return out
+	}
+	for _, tc := range []struct {
+		stations                []music.Station
+		switched, card, banners string
+	}{
+		{[]music.Station{{ID: "a"}, {ID: "b"}, {ID: "c"}}, "abc", "", ""},
+		{[]music.Station{{ID: "a"}, {ID: "b"}, {ID: "c"}, {ID: "d"}, {ID: "e"}}, "", "abcde", ""},
+		{[]music.Station{{ID: "a"}, {ID: "h", Standalone: true}, {ID: "b"}, {ID: "c"}}, "abc", "", "h"},
+		{[]music.Station{{ID: "a"}, {ID: "b"}, {ID: "c"}, {ID: "d"}, {ID: "e"}, {ID: "h", Standalone: true}}, "", "abcde", "h"},
+	} {
+		switched, cards, banners := stationGroups(tc.stations)
+		if ids(switched) != tc.switched || ids(cards) != tc.card || ids(banners) != tc.banners {
+			t.Errorf("%+v: switched %q, cards %q, banners %q", tc.stations, ids(switched), ids(cards), ids(banners))
+		}
+	}
+}
+
+// heartApp shows a switch of two stations and Heart Mode, standalone, with
+// what the app posts in hand.
+func heartApp() (*app, chan func()) {
+	a, ch := radioApp()
+	a.stations = []music.Station{
+		{ID: "a", Name: "First"}, {ID: "b", Name: "Second"},
+		{ID: "heart", Name: "Heart Mode", Headline: "Songs you'll love", Icon: "heart", Standalone: true},
+	}
+	return a, ch
+}
+
+// A standalone station's banner starts it by its own ID, and the switch
+// beside it chooses among the others only.
+func TestStandaloneStationBanner(t *testing.T) {
+	asked := make(chan string, 4)
+	a, ch := heartApp()
+	fake(a).stationNext = func(id string) ([]music.Track, error) {
+		asked <- id
+		return sourced(song(id+"1", "一"), song(id+"2", "二"), song(id+"3", "三")), nil
+	}
+	tt := ui.NewTester(a.view, 1200, 900)
+	tt.Frame()
+	if _, ok := tt.AccessByRole(ui.RoleRadio, "Heart Mode"); ok {
+		t.Fatal("the switch offers the standalone station")
+	}
+	if err := tt.Click("Start Playing"); err != nil {
+		t.Fatal(err)
+	}
+	if id := wait(t, asked, "the first songs"); id != "heart" {
+		t.Fatalf("started %q", id)
+	}
+	until(t, ch, func() bool { return a.pl.Radio() != "" })
+	if a.pl.Radio() != radioName("fake", &a.stations[2]) {
+		t.Fatalf("radio %q", a.pl.Radio())
+	}
+}
+
+// Leaving a standalone station from its banner stops the radio, and the song
+// it played plays on.
+func TestLeaveStandaloneStation(t *testing.T) {
+	a, _ := heartApp()
+	fake(a).stationNext = func(string) ([]music.Track, error) { return nil, nil }
+	a.pl.Cue(sourced(song("1", "晚风"), song("2", "推荐的歌")))
+	a.pl.AttachRadio(radioName("fake", &a.stations[2]), func(func([]music.Track)) {})
+	tt := ui.NewTester(a.view, 1200, 900)
+	settled(tt)
+	if err := tt.Click("Leave Heart Mode"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.pl.Radio() != "" || a.pl.Current() == nil || a.pl.Current().ID != "1" {
+		t.Fatalf("radio %q, current %+v", a.pl.Radio(), a.pl.Current())
+	}
+	if _, ok := tt.Find("Leave Heart Mode"); ok {
+		t.Error("the banner still offers to leave")
+	}
+	if _, ok := tt.Find("Start Playing"); !ok {
+		t.Error("the banner doesn't offer to start again")
+	}
+}

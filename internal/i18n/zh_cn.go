@@ -317,6 +317,7 @@ var zhCN = map[string]string{
 	"Stage Style":                                                                       "律动效果",
 	"Standard":                                                                          "标准",
 	"Start Listening":                                                                   "开始收听",
+	"Start Playing":                                                                     "开始播放",
 	"Stations":                                                                          "电台",
 	"Steps":                                                                             "云阶",
 	"Subscribe":                                                                         "订阅",
