@@ -60,13 +60,16 @@ jobs:
   build:
     needs: draft-release
     name: ${{ matrix.name }}
+    defaults:
+      run:
+        shell: bash
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - { name: macOS, os: macos-latest, platform: "darwin/arm64,darwin/amd64", flags: "-sign=- -skip-notarize" }
-          - { name: Windows, os: ubuntu-latest, platform: "windows/amd64,windows/arm64" }
+          - { name: Windows, os: windows-latest, platform: "windows/amd64,windows/arm64" }
           - { name: Linux, os: ubuntu-latest, platform: "linux/amd64,linux/arm64" }
     steps:
       - uses: actions/checkout@v7
@@ -89,9 +92,6 @@ jobs:
             ${{ steps.go-env.outputs.mod }}
           key: addons-go-${{ matrix.name }}-${{ hashFiles('go.mod', 'go.sum') }}
           restore-keys: addons-go-${{ matrix.name }}-
-      - name: Install NSIS, for the Windows installers
-        if: matrix.name == 'Windows'
-        run: sudo apt-get update && sudo apt-get install -y nsis
       # The version, where updates come from and the key they're checked
       # with, and the version's notes in CHANGELOG.md, which mygo build
       # puts in the updates: upstream's notes of the version it's based on.
