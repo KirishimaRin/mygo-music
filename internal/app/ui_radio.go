@@ -84,6 +84,9 @@ func (a *app) playStation(lib *library, st *music.Station) {
 		return
 	}
 	name := radioName(lib.id, st)
+	if a.radioStarting == name {
+		return
+	}
 	if a.pl.Radio() == name {
 		if !a.pl.Playing() {
 			a.pl.TogglePlay()
@@ -91,8 +94,16 @@ func (a *app) playStation(lib *library, st *music.Station) {
 		return
 	}
 	a.radioStarting = name
+	if a.radioPending[name] {
+		return
+	}
+	if a.radioPending == nil {
+		a.radioPending = make(map[string]bool)
+	}
+	a.radioPending[name] = true
 	feed := a.radioFeed(name)
 	feed(func(tracks []music.Track) {
+		delete(a.radioPending, name)
 		if a.radioStarting != name {
 			return
 		}
@@ -294,7 +305,7 @@ func (a *app) stationBanner(c *ui.Context, lib *library, st *music.Station) {
 			case on:
 				label = T("Resume")
 			}
-			if pillButton(c.Key("play"), icon, label, primary, onPrimary).Clicked() {
+			if pillButton(c.Key("play"), icon, label, primary, onPrimary).Disabled(starting).Clicked() {
 				a.playStation(lib, st)
 			}
 		})
@@ -346,11 +357,12 @@ func (a *app) radioCard(c *ui.Context, lib *library) {
 						ui.Text(c, first.Description).FontSize(13.5).TextColor(white.Alpha(0.75)).MaxLines(2)
 					}
 					ui.Row(c).Margin(18, 0, 0, 0).Children(func() {
+						starting := a.radioStarting == radioName(lib.id, first)
 						label := T("Start Listening")
-						if a.radioStarting != "" {
+						if starting {
 							label = T("Tuning in…")
 						}
-						if pillButton(c.Key("start"), iconPlay, label, white, ui.Hex("#1d1d1f")).Clicked() {
+						if pillButton(c.Key("start"), iconPlay, label, white, ui.Hex("#1d1d1f")).Disabled(starting).Clicked() {
 							a.playStation(lib, first)
 						}
 					})

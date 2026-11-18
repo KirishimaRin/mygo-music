@@ -12,7 +12,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: addons-release
@@ -20,42 +20,21 @@ concurrency:
 jobs:
   draft-release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     outputs:
       version: ${{ steps.version.outputs.version }}
       base: ${{ steps.version.outputs.base }}
+      release_id: ${{ steps.version.outputs.release_id }}
     steps:
       - uses: actions/checkout@v7
-      # A run again on the same commit builds its tag again.
-      - name: Find the version and tag it
+        with:
+          fetch-depth: 0
+      - name: Verify the upstream base and reserve a new draft
         id: version
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          base="$(gh release view --repo egoist/mygo-music --json tagName --jq .tagName)"
-          base="${base#v}"
-          version="$base-addons"
-          n=1
-          while sha="$(git ls-remote --tags origin "refs/tags/v$version" | cut -f1)"; [ -n "$sha" ] && [ "$sha" != "$GITHUB_SHA" ]; do
-            n=$((n + 1))
-            version="$base-addons.$n"
-          done
-          if [ -z "$sha" ]; then
-            git tag "v$version"
-            git push origin "refs/tags/v$version"
-          fi
-          echo "base=$base" >> "$GITHUB_OUTPUT"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-      - name: Create the draft release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ steps.version.outputs.version }}
-          BASE: ${{ steps.version.outputs.base }}
-        run: |
-          if ! gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
-            gh release create "v$VERSION" --repo "$GITHUB_REPOSITORY" \
-              --draft --verify-tag --title "v$VERSION" \
-              --notes "MyGo Music $BASE with this fork's additions: see [FORK.md](https://github.com/$GITHUB_REPOSITORY/blob/v$VERSION/FORK.md)."
-          fi
+        run: bash .github/scripts/addons-draft.sh
 
   build:
     needs: draft-release
@@ -73,8 +52,6 @@ jobs:
           - { name: Linux, os: ubuntu-latest, platform: "linux/amd64,linux/arm64" }
     steps:
       - uses: actions/checkout@v7
-        with:
-          ref: refs/tags/v${{ needs.draft-release.outputs.version }}
       - uses: oven-sh/setup-bun@v2
       - uses: actions/setup-go@v7
         with:
@@ -117,18 +94,49 @@ jobs:
           awk '/^## / && !done { while ((getline line < "notes.md") > 0) print line; print ""; done = 1 } { print }' CHANGELOG.md > CHANGELOG.new
           mv CHANGELOG.new CHANGELOG.md
           head -n 12 CHANGELOG.md
-      - name: Build and upload
+      - name: Build and sign
         env:
           GH_TOKEN: ${{ github.token }}
           MYGO_UPDATER_PRIVATE_KEY: ${{ secrets.MYGO_UPDATER_PRIVATE_KEY }}
-        run: go tool mygo build -platform "${{ matrix.platform }}" ${{ matrix.flags }} -upload
+        run: go tool mygo build -platform "${{ matrix.platform }}" ${{ matrix.flags }}
+      # Packages are already compressed. Retain only the release files.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: addons-${{ needs.draft-release.outputs.version }}-${{ matrix.name }}
+          path: |
+            build/*/*.dmg
+            build/*/*-setup-*.exe
+            build/*/*.deb
+            build/*/*.rpm
+            build/*/*.tar.gz
+            build/*/*.delta
+            build/*/install.sh
+            build/*/install.ps1
+            build/*/update-*.json
+          compression-level: 0
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 3
 
   publish:
     needs: [draft-release, build]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
-      - name: Publish the release
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: false
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: addons-${{ needs.draft-release.outputs.version }}-*
+          path: release-builds
+      - name: Verify, upload and publish the draft
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.draft-release.outputs.version }}
-        run: gh release edit "v$VERSION" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease=false --latest
+          RELEASE_ID: ${{ needs.draft-release.outputs.release_id }}
+          PUBLIC_KEY: ${{ vars.MYGO_UPDATER_PUBLIC_KEY }}
+        run: bash .github/scripts/addons-publish.sh

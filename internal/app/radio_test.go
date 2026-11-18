@@ -245,6 +245,53 @@ func TestStandaloneStationBanner(t *testing.T) {
 	}
 }
 
+// A pending standalone request can be reused after switching and never labels another station as tuning.
+func TestStandaloneStationTuningIsScoped(t *testing.T) {
+	a, ch := heartApp()
+	asked := make(chan string, 8)
+	release := make(chan struct{}, 2)
+	defer close(release)
+	fake(a).stationNext = func(id string) ([]music.Track, error) {
+		asked <- id
+		<-release
+		return sourced(song(id+"1", id)), nil
+	}
+	tt := ui.NewTester(a.view, 1200, 900)
+	tt.Frame()
+	if err := tt.Click("Start Playing"); err != nil {
+		t.Fatal(err)
+	}
+	if id := wait(t, asked, "standalone tuning"); id != "heart" {
+		t.Fatalf("asked for %q", id)
+	}
+	tt.Frame()
+	// Clicking the disabled banner is allowed to report an input error.
+	_ = tt.Click("Tuning in…")
+	if err := tt.Click("Start Listening"); err != nil {
+		t.Fatal(err)
+	}
+	if id := wait(t, asked, "regular tuning"); id != "a" {
+		t.Fatalf("asked for %q", id)
+	}
+	if err := tt.Click("Start Playing"); err != nil {
+		t.Fatal(err)
+	}
+	if len(a.radioPending) != 2 || a.radioStarting != radioName("fake", &a.stations[2]) {
+		t.Fatalf("pending %v, selected %q", a.radioPending, a.radioStarting)
+	}
+	release <- struct{}{}
+	release <- struct{}{}
+	until(t, ch, func() bool { return len(a.radioPending) == 0 })
+	if a.pl.Radio() != radioName("fake", &a.stations[2]) {
+		t.Fatalf("playing %q", a.pl.Radio())
+	}
+	select {
+	case id := <-asked:
+		t.Fatalf("asked again for %q", id)
+	default:
+	}
+}
+
 // Leaving a standalone station from its banner stops the radio, and the song
 // it played plays on.
 func TestLeaveStandaloneStation(t *testing.T) {

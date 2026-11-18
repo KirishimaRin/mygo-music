@@ -64,7 +64,7 @@ type Player struct {
 	track   *music.Track
 	out     *audio.Player
 	stream  stream
-	watch   *watched // stream, as out plays it
+	watch   *watched      // stream, as out plays it
 	info    *music.Stream // what the current track streams
 	fade    fader
 	gain    float64 // the current track's normalizing gain
@@ -172,6 +172,8 @@ func (p *Player) ended() {
 	if p.repeat == RepeatOne {
 		p.out.Seek(0)
 		p.out.Play()
+		p.recorded = ""
+		p.record()
 		p.listen()
 		return
 	}
@@ -481,15 +483,16 @@ func (p *Player) TogglePlay() {
 		return
 	}
 	p.playing = true
-	p.record()
 	if !p.seeking && !out.Playing() {
 		if out.Position() >= out.Duration()-time.Second {
 			// Again from its start: another play.
 			p.endPlay(music.EndSkipped, out.Position())
 			out.Seek(0)
+			p.recorded = ""
 		}
 		out.Play()
 	}
+	p.record()
 	p.listen()
 	p.fade.fade(1, fadeIn, nil)
 	p.sync()

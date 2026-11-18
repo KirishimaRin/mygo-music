@@ -306,16 +306,25 @@ func (p *Player) remoteAnswered(r *remote, st *music.RemoteState, err error) {
 			return
 		}
 		pos := time.Duration(st.Position) * time.Millisecond
+		// Some devices keep the same track selected and reset its position
+		// on completion. After a near-end sample, that reset means it ended.
+		if r.near && pos == 0 {
+			p.remoteEnded(r, music.EndFinished)
+			return
+		}
+		before := p.remotePosition()
+		jumped := p.reconcileRemoteHeard(r, before, pos)
 		end := r.duration
 		if end <= 0 {
 			end = p.track.Length()
 		}
-		if r.near || end > 0 && pos >= end-remoteEndZone {
+		if !jumped && (r.near || end > 0 && pos >= end-remoteEndZone) {
 			p.remoteEnded(r, music.EndFinished)
 			return
 		}
 		// Paused there, by the listener at the other end.
 		r.pos, r.at, r.running = pos, p.now(), false
+		r.near = false
 		p.playing = false
 		p.sync()
 		p.post(func() {})
@@ -332,6 +341,19 @@ func (p *Player) remotePositionStopped(r *remote) time.Duration {
 	return p.remotePosition()
 }
 
+// reconcileRemoteHeard keeps jumps and clock drift out of listening time
+// before the reported position replaces the clock estimate.
+func (p *Player) reconcileRemoteHeard(r *remote, before, pos time.Duration) (jumped bool) {
+	switch d := pos - before; {
+	case d > remoteDrift, d < -remoteDrift && pos < r.pos:
+		p.jumped(pos)
+		return true
+	case d < -remoteDrift && p.listening:
+		p.heardTo(pos)
+	}
+	return false
+}
+
 // remoteGoes takes the position of the track playing, as it's meant to.
 func (p *Player) remoteGoes(r *remote, st *music.RemoteState, settling bool) {
 	r.seen = true
@@ -340,14 +362,7 @@ func (p *Player) remoteGoes(r *remote, st *music.RemoteState, settling bool) {
 	}
 	before := p.remotePosition()
 	pos := time.Duration(st.Position) * time.Millisecond
-	switch d := pos - before; {
-	case d > remoteDrift, d < -remoteDrift && pos < r.pos:
-		// Moved at the other end: what it jumped over wasn't heard.
-		p.jumped(pos)
-	case d < -remoteDrift && p.listening:
-		// Slower than the clock: heard only as far as it got.
-		p.heardTo(pos)
-	}
+	p.reconcileRemoteHeard(r, before, pos)
 	duration := time.Duration(st.Duration) * time.Millisecond
 	shown := duration > 0 && duration != r.duration
 	if duration > 0 {
