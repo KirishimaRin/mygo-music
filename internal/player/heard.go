@@ -1,15 +1,14 @@
 package player
 
 import (
-	"crypto/rand"
 	"time"
 
 	"mygo-music/internal/music"
 )
 
 // A play of a track lasts from when it starts to play until something else
-// plays, it plays to its end, or the app quits. The player keeps how much of
-// it is heard: how far its position moved
+// plays, it plays to its end, or the app quits. For a source that wants to
+// know, the player keeps how much of it is heard: how far its position moved
 // on, from where it started and from each seek, so what's paused, waited for
 // or jumped over doesn't count, and what a seek back plays again does. It's
 // added up only as the position jumps and as the play ends, never as it plays.
@@ -18,31 +17,15 @@ import (
 // ended.
 const quitWait = 2 * time.Second
 
-// Listen describes one completed playback session.
-type Listen struct {
-	ID      string
-	Track   music.Track
-	Started time.Time
-	Ended   time.Time
-	Heard   time.Duration
-	Reason  music.EndReason
-}
-
-// listen starts a play of the current track as it starts to play, unless
-// one is under way or neither listener needs it.
+// listen starts a play of the current track as it starts to play, unless one
+// is under way or its source doesn't want to know.
 func (p *Player) listen() {
 	if p.listening || p.track == nil || !p.playing {
 		return
 	}
 	src := p.sourceOf(p.track)
-	_, canEnd := src.(music.PlayEnder)
-	p.tellSource = canEnd && src.Can("playEnded")
-	if p.Listened == nil && !p.tellSource {
+	if _, ok := src.(music.PlayEnder); !ok || !src.Can("playEnded") {
 		return
-	}
-	if p.Listened != nil {
-		p.listenID = rand.Text()
-		p.listenStarted = p.now()
 	}
 	p.listening, p.heard, p.mark = true, 0, p.Position()
 }
@@ -71,13 +54,6 @@ func (p *Player) endPlay(why music.EndReason, pos time.Duration) (done chan stru
 	}
 	p.listening = false
 	p.heardTo(pos)
-	if p.Listened != nil && p.listenID != "" && p.heard > 0 {
-		p.Listened(Listen{p.listenID, *p.track, p.listenStarted, p.now(), p.heard, why})
-	}
-	p.listenID = ""
-	if !p.tellSource {
-		return nil
-	}
 	// Its source as it is now: one taken out meanwhile isn't told.
 	src, ok := p.sourceOf(p.track).(music.PlayEnder)
 	if !ok {

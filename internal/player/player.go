@@ -40,10 +40,6 @@ type Player struct {
 	// Normalize reports whether to even out the loudness of tracks, as
 	// the settings say.
 	Normalize func() bool
-	// Listened hears how a play finished, on the main thread. It must return
-	// promptly so a slow history disk cannot hold up the next track.
-	Listened func(Listen)
-
 	// Cache keeps the songs played, if set.
 	Cache *Cache
 	// Changed, if set, hears that what plays, where it is or whether it
@@ -102,14 +98,11 @@ type Player struct {
 
 	recorded string // the track last told its source it played
 
-	// A play under way (heard.go): its listeners, start, and how much of it
-	// has been heard so far, to mark.
-	listening     bool
-	tellSource    bool
-	listenID      string
-	listenStarted time.Time
-	heard         time.Duration
-	mark          time.Duration
+	// A play of the current track under way, for its source to hear how much
+	// of it was heard (heard.go): heard so far, to mark.
+	listening bool
+	heard     time.Duration
+	mark      time.Duration
 
 	ahead *ahead // the next track's audio, asked for before its turn
 }

@@ -2,22 +2,6 @@ package i18n
 
 // zhCN is the app's text in Simplified Chinese, by its English.
 var zhCN = map[string]string{
-	"Listening History":                 "听歌足迹",
-	"Previous month":                    "上个月",
-	"Next month":                        "下个月",
-	"Today":                             "今天",
-	"Back to day":                       "返回当天",
-	"Could not load listening history.": "无法读取听歌足迹。",
-	"No plays on this day.":             "当天没有播放记录。",
-	"Show more":                         "显示更多",
-	"Su":                                "日",
-	"Mo":                                "一",
-	"Tu":                                "二",
-	"We":                                "三",
-	"Th":                                "四",
-	"Fr":                                "五",
-	"Sa":                                "六",
-
 	"%.1f GB used":                 "已用 %.1f GB",
 	"%d MB used":                   "已用 %d MB",
 	"%d albums":                    "%d 张专辑",
