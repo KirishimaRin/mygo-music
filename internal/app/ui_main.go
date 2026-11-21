@@ -146,6 +146,8 @@ func (a *app) load(r route) {
 		return
 	}
 	switch r.page {
+	case pageListening:
+		a.showListeningDay(time.Now())
 	case pageHome:
 		a.freshenHome()
 	case pagePlaylist:
@@ -234,6 +236,9 @@ func (a *app) sidebar(c *ui.Context) {
 		ui.Scroll(c.Key("nav")).TrackScroll(&a.navScroll).Grow(1).Margin(0, -6).Padding(0, 6).Gap(4).Children(func() {
 			for _, n := range a.sidebarItems() {
 				a.navItem(c, n.icon, n.label, n.route)
+			}
+			if a.listening.store != nil {
+				a.navItem(c, iconCalendar, T("Listening History"), route{page: pageListening})
 			}
 			if a.searched.query != "" && a.searched.src == a.id {
 				a.navItem(c, iconSearch, T("Search Results"), a.searched)
@@ -428,6 +433,8 @@ func (a *app) content(c *ui.Context) {
 		a.browsePage(c)
 	case pageSection:
 		a.sectionPage(c)
+	case pageListening:
+		a.listeningPage(c)
 	}
 }
 

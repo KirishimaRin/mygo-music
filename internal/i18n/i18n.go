@@ -135,6 +135,14 @@ func Today(t time.Time) string {
 	return t.Weekday().String() + ", " + Date(t)
 }
 
+// Month labels a calendar month with its year.
+func Month(t time.Time) string {
+	if Language() == Chinese {
+		return fmt.Sprintf("%d年%d月", t.Year(), t.Month())
+	}
+	return fmt.Sprintf("%s %d", t.Month(), t.Year())
+}
+
 // Songs says how many songs there are.
 func Songs(n int) string {
 	if n == 1 {

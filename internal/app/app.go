@@ -34,6 +34,7 @@ const (
 	pageSavedAlbums
 	pageBrowse
 	pageSection
+	pageListening
 )
 
 type route struct {
@@ -63,6 +64,8 @@ type app struct {
 	art   *artCache
 	pl    *player.Player
 	pal   palette
+
+	listening listeningState
 
 	// libs are the sources, the built-in one first, and what the app has of
 	// each. The active one's is embedded: a.mine is what the active source
@@ -353,6 +356,7 @@ func Run() error {
 		// made, and the view asks the player what plays.
 		a.art = newArtCache(a.post)
 		a.pl = player.New(a.post)
+		a.openListeningStore()
 		a.pl.Quiet = func(fn func()) { mygo.RunOnMain(fn) }
 		a.pl.Source = a.sourceByID
 		a.pl.Failed = a.sourceFailed
@@ -438,6 +442,7 @@ func Run() error {
 			a.tray.Destroy()
 		}
 		a.pl.Quit()
+		a.closeListeningStore()
 		a.closeSources()
 	})
 	// Shutting down, Windows ends the app without OnBeforeQuit.
@@ -445,6 +450,7 @@ func Run() error {
 		if a.pl != nil {
 			a.pl.Quit()
 		}
+		a.closeListeningStore()
 	})
 	mygo.App.OnWindowAllClosed(func() {})
 	mygo.App.OnActivate(func(bool) { a.showMain() })
