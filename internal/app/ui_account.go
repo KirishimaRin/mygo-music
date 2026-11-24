@@ -417,8 +417,34 @@ func (a *app) myPlaylists(c *ui.Context, title string, lists []music.Playlist, m
 	if len(lists) == 0 && !canCreate {
 		return
 	}
+	a.sidebarDisclosure(c.Key(fmt.Sprint("lists-", mine)), title, collapsed, func(c *ui.Context) {
+		if canCreate && iconButton(c.Key("new"), iconPlus, 13, a.pal.faint, T("New Playlist")).Size(26, 26).Radius(6).Clicked() {
+			a.newPlaylist(nil)
+		}
+	})
+	if *collapsed {
+		return
+	}
+	for i := range lists {
+		pl := &lists[i]
+		b := a.sidebarCollectionRow(c.Key(pl.ID), pl.Name, pl.ImageURL, route{page: pagePlaylist, id: pl.ID})
+		switch {
+		case mine && pl.Fixed:
+		case mine && (a.can("renamePlaylist") || a.can("deletePlaylist")):
+			b.ContextMenu(func(m *ui.Menu) { a.playlistMenu(m, pl) })
+		case !mine && a.can("savePlaylist"):
+			b.ContextMenu(func(m *ui.Menu) {
+				if m.Item(T("Remove from Saved")).Chosen() {
+					a.toggleSaved(*pl)
+				}
+			})
+		}
+	}
+}
+
+func (a *app) sidebarDisclosure(c *ui.Context, title string, collapsed *bool, action func(*ui.Context)) {
 	p := a.pal
-	ui.Row(c.Key(fmt.Sprint("lists-", mine))).AlignItems(ui.Center).Margin(18, 4, 6, 6).Children(func() {
+	ui.Row(c).AlignItems(ui.Center).Margin(18, 4, 6, 6).Children(func() {
 		b := ui.ButtonBase(c.Key("toggle")).Grow(1).Height(26).PaddingX(4).Gap(6).Radius(6).
 			AlignItems(ui.Center).Justify(ui.Start).Role(ui.RoleDisclosure).Label(title)
 		if b.Clicked() {
@@ -436,42 +462,28 @@ func (a *app) myPlaylists(c *ui.Context, title string, lists []music.Playlist, m
 			}
 			ui.Icon(c, arrow).Size(12, 12).TextColor(p.faint)
 		})
-		if canCreate && iconButton(c.Key("new"), iconPlus, 13, p.faint, T("New Playlist")).Size(26, 26).Radius(6).Clicked() {
-			a.newPlaylist(nil)
+		if action != nil {
+			action(c)
 		}
 	})
-	if *collapsed {
-		return
+}
+
+func (a *app) sidebarCollectionRow(c *ui.Context, name, image string, target route) ui.Element {
+	b := ui.ButtonBase(c).Height(34).PaddingX(8).Gap(10).Radius(8).AlignItems(ui.Center).Justify(ui.Start).FocusRing(false).Label(name)
+	switch {
+	case a.route.page == target.page && a.route.id == target.id && !a.nowPlaying:
+		b.Background(a.pal.press)
+	case b.Hovered():
+		b.Background(a.pal.hover)
 	}
-	for i := range lists {
-		pl := &lists[i]
-		selected := a.route.page == pagePlaylist && a.route.id == pl.ID && !a.nowPlaying
-		b := ui.ButtonBase(c.Key(pl.ID)).Height(34).PaddingX(8).Gap(10).Radius(8).AlignItems(ui.Center).Justify(ui.Start).FocusRing(false).Label(pl.Name)
-		switch {
-		case selected:
-			b.Background(p.press)
-		case b.Hovered():
-			b.Background(p.hover)
-		}
-		b.Children(func() {
-			a.cover(c, pl.ImageURL, 80, 22, 5)
-			ui.Text(c, pl.Name).FontSize(13).SingleLine().Shrink(1).MinWidth(0)
-		})
-		switch {
-		case mine && pl.Fixed:
-		case mine && (a.can("renamePlaylist") || a.can("deletePlaylist")):
-			b.ContextMenu(func(m *ui.Menu) { a.playlistMenu(m, pl) })
-		case !mine && a.can("savePlaylist"):
-			b.ContextMenu(func(m *ui.Menu) {
-				if m.Item(T("Remove from Saved")).Chosen() {
-					a.toggleSaved(*pl)
-				}
-			})
-		}
-		if b.Clicked() {
-			a.open(route{page: pagePlaylist, id: pl.ID})
-		}
+	b.Children(func() {
+		a.cover(c, image, 80, 22, 5)
+		ui.Text(c, name).FontSize(13).SingleLine().Shrink(1).MinWidth(0)
+	})
+	if b.Clicked() {
+		a.open(target)
 	}
+	return b
 }
 
 // playlistMenu has what can be done with a playlist of the listener's, as far

@@ -85,6 +85,8 @@ func navIcon(name string) *ui.SVG {
 		return iconSearch
 	case "star":
 		return iconStar
+	case "cloud":
+		return iconDatabase
 	}
 	return iconNote
 }

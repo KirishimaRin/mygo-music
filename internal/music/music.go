@@ -130,6 +130,45 @@ type Page struct {
 	More   bool    `json:"more,omitempty"`
 }
 
+// CloudPage holds matches from a page of the listener's uploaded songs.
+// Next is the offset into the unfiltered list, or zero at its end.
+type CloudPage struct {
+	Tracks []Track `json:"tracks,omitempty"`
+	Next   int     `json:"next,omitempty"`
+}
+
+type CloudSource interface {
+	CloudTracks(offset int, query string) (*CloudPage, error)
+}
+
+// WikiSection presents one part of a song's encyclopedia.
+type WikiSection struct {
+	Title       string      `json:"title"`
+	Description string      `json:"description,omitempty"`
+	Entries     []WikiEntry `json:"entries,omitempty"`
+	Tracks      []Track     `json:"tracks,omitempty"`
+}
+
+type WikiEntry struct {
+	Title      string `json:"title"`
+	Subtitle   string `json:"subtitle,omitempty"`
+	Text       string `json:"text,omitempty"`
+	ImageURL   string `json:"imageUrl,omitempty"`
+	ArtistID   string `json:"artistId,omitempty"`
+	Style      string `json:"style,omitempty"`
+	PlaylistID string `json:"playlistId,omitempty"`
+	ShowID     string `json:"showId,omitempty"`
+	URL        string `json:"url,omitempty"`
+}
+
+type SongWiki struct {
+	Sections []WikiSection `json:"sections,omitempty"`
+}
+
+type WikiSource interface {
+	SongWiki(trackID string) (*SongWiki, error)
+}
+
 // AlbumList is a page of albums.
 type AlbumList struct {
 	Albums []Album `json:"albums,omitempty"`
@@ -245,12 +284,16 @@ type Link struct {
 type NavItem struct {
 	Title string `json:"title"`
 	Page  string `json:"page,omitempty"`
+	// View optionally opens an app view for a page, with Page as its fallback.
+	View string `json:"view,omitempty"`
 	// Section is the ID of a section of the source's Home, whose songs' page
 	// it opens, as the feature card does, even before Home has loaded.
 	Section string `json:"section,omitempty"`
 	// Builtin is home, liked, savedAlbums, stations or shows. One the source
 	// can't do doesn't show.
 	Builtin string `json:"builtin,omitempty"`
+	// SidebarList presents savedAlbums as a disclosure below saved playlists.
+	SidebarList bool `json:"sidebarList,omitempty"`
 	// Icon names one of the app's: home, note, album, artist, playlist, radio,
 	// podcast, chart, calendar, heart, search or star.
 	Icon string `json:"icon,omitempty"`

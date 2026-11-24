@@ -29,7 +29,7 @@ var capabilities = []string{
 	"signIn", "signOut", "account",
 	"search", "suggest",
 	"playlists", "playlist", "album", "artist", "liked", "recent",
-	"home", "browse",
+	"home", "browse", "cloudTracks", "songWiki",
 	"isLiked", "like", "likeEpisode",
 	"createPlaylist", "renamePlaylist", "deletePlaylist", "addToPlaylist", "removeFromPlaylist", "movePlaylistTrack", "savePlaylist",
 	"followArtist", "saveAlbum", "savedAlbums",
@@ -107,8 +107,11 @@ type library struct {
 	stationsOnce bool
 	stationsErr  string
 
-	savedAlbums      []music.Album
-	savedAlbumsPaged paged
+	savedAlbums           []music.Album
+	savedAlbumsPaged      paged
+	savedAlbumsGeneration uint64
+	cloud                 *cloudData
+	wikis                 map[string]*wikiData
 }
 
 func newLibrary(src music.Source) *library {
@@ -131,7 +134,9 @@ func (l *library) forget() {
 	l.searches = map[route]*searchData{}
 	l.liked = nil
 	l.likedList, l.likedPaged, l.likedAt = nil, paged{}, time.Time{}
-	l.savedAlbums, l.savedAlbumsPaged = nil, paged{}
+	l.resetSavedAlbums()
+	l.cloud = nil
+	l.wikis = map[string]*wikiData{}
 	l.subscribed, l.subscribedOnce = nil, false
 	l.stations, l.stationsOnce = nil, false
 }

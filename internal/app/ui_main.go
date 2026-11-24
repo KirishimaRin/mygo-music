@@ -34,7 +34,7 @@ func (a *app) view(c *ui.Context) {
 		c.Root().Background(ui.Transparent)
 	}
 	root := ui.Box(c).Fill()
-	if !c.Focused(a.searchBox) {
+	if !c.Focused(a.searchBox) && !c.Focused(a.cloudSearchBox) {
 		// Space plays and pauses wherever the focus is, as in Music. On
 		// the container around everything, it comes before a button the
 		// pointer focused, which would take Space as a click; on the
@@ -136,6 +136,9 @@ func (a *app) show(r route) {
 	if r.page == pageSearch {
 		a.query, a.searched = r.query, r
 	}
+	if r.page == pageCloud {
+		a.cloudQuery = r.query
+	}
 	a.load(r)
 }
 
@@ -172,6 +175,8 @@ func (a *app) load(r route) {
 		if !lib.savedAlbumsPaged.loaded {
 			a.loadSavedAlbums(lib)
 		}
+	case pageCloud:
+		a.loadCloud(lib, r.query, false)
 	case pageBrowse:
 		a.loadBrowse(lib, r.id, false)
 	case pageSection:
@@ -242,6 +247,7 @@ func (a *app) sidebar(c *ui.Context) {
 				a.myPlaylists(c, T("My Playlists"), a.mine, true, &a.mineCollapsed)
 				a.myPlaylists(c, T("Saved Playlists"), a.saved, false, &a.savedCollapsed)
 			}
+			a.savedAlbumsSidebar(c)
 		})
 
 		a.accountRow(c)
@@ -424,6 +430,8 @@ func (a *app) content(c *ui.Context) {
 		a.likedPage(c)
 	case pageSavedAlbums:
 		a.savedAlbumsPage(c)
+	case pageCloud:
+		a.cloudPage(c)
 	case pageBrowse:
 		a.browsePage(c)
 	case pageSection:
@@ -588,7 +596,7 @@ func (a *app) freshen() {
 	if time.Since(lib.mineAt) > listsFresh {
 		a.loadMine(lib)
 	}
-	if r := a.route; r.src == lib.id && (r.page == pagePlaylist || r.page == pageLiked) {
+	if r := a.route; r.src == lib.id && (r.page == pagePlaylist || r.page == pageLiked || r.page == pageCloud) {
 		a.load(r)
 	}
 }
@@ -620,6 +628,7 @@ var builtinPages = map[string]struct {
 	"home":        {pageHome, "", "Home", func() *ui.SVG { return iconHome }},
 	"liked":       {pageLiked, "liked", "Liked Songs", func() *ui.SVG { return iconHeart }},
 	"savedAlbums": {pageSavedAlbums, "savedAlbums", "Saved Albums", func() *ui.SVG { return iconAlbum }},
+	"cloudTracks": {pageCloud, "cloudTracks", "My Music Cloud", func() *ui.SVG { return iconDatabase }},
 	"stations":    {pageStations, "stations", "Radio", func() *ui.SVG { return iconRadio }},
 	"shows":       {pageShows, "shows", "Podcasts", func() *ui.SVG { return iconPodcast }},
 }
@@ -637,6 +646,12 @@ func (a *app) sidebarItems() []sidebarItem {
 	for _, n := range nav {
 		if n.Builtin == "" {
 			switch {
+			case n.View == "cloudTracks" && a.can("cloudTracks"):
+				icon := builtinPages["cloudTracks"].icon()
+				if n.Icon != "" {
+					icon = navIcon(n.Icon)
+				}
+				items = append(items, sidebarItem{icon, n.Title, route{page: pageCloud}})
 			case n.Section != "":
 				if a.can("home") {
 					items = append(items, sidebarItem{navIcon(n.Icon), n.Title, route{page: pageSection, section: n.Section}})
@@ -644,6 +659,9 @@ func (a *app) sidebarItems() []sidebarItem {
 			case a.can("browse"):
 				items = append(items, sidebarItem{navIcon(n.Icon), n.Title, route{page: pageBrowse, id: n.Page}})
 			}
+			continue
+		}
+		if n.Builtin == "savedAlbums" && n.SidebarList {
 			continue
 		}
 		b, ok := builtinPages[n.Builtin]
@@ -666,7 +684,7 @@ func (a *app) sidebarItems() []sidebarItem {
 // app does.
 func (a *app) builtinTitle(name string) string {
 	for _, n := range a.src.Info().Navigation {
-		if n.Builtin == name && n.Title != "" {
+		if (n.Builtin == name || n.View == name) && n.Title != "" {
 			return n.Title
 		}
 	}
