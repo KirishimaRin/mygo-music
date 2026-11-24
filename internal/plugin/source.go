@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"context"
 	"errors"
 	"log"
 	"math"
@@ -280,6 +281,28 @@ func (p *Plugin) PlayEnded(t music.Track, heard time.Duration, why music.EndReas
 	params := map[string]any{"id": t.ID, "seconds": math.Round(heard.Seconds()*10) / 10, "reason": why}
 	if err := p.call("playEnded", params, nil); err != nil && !errors.Is(err, music.ErrUnsupported) {
 		log.Printf("plugin %s: playEnded: %v", p.manifest.ID, err)
+	}
+}
+
+// ObservesPlayback reports whether the manifest opts into playback broadcasts.
+func (p *Plugin) ObservesPlayback() bool { return p.manifest.ObservePlayback }
+
+// ObservePlayed tells the plugin which track has started, from any source.
+func (p *Plugin) ObservePlayed(ctx context.Context, t music.Track) {
+	p.observe(ctx, "observePlayed", map[string]any{"id": t.ID, "source": t.Source, "name": t.Name})
+}
+
+// ObserveEnded tells the plugin how much of that play was heard and why it ended.
+func (p *Plugin) ObserveEnded(ctx context.Context, t music.Track, heard time.Duration, why music.EndReason) {
+	p.observe(ctx, "observeEnded", map[string]any{
+		"id": t.ID, "source": t.Source, "name": t.Name,
+		"seconds": math.Round(heard.Seconds()*10) / 10, "reason": why,
+	})
+}
+
+func (p *Plugin) observe(ctx context.Context, method string, params map[string]any) {
+	if err := p.callContext(ctx, callTimeout, method, params, nil); err != nil && ctx.Err() == nil && !errors.Is(err, music.ErrUnsupported) {
+		log.Printf("plugin %s: %s: %v", p.manifest.ID, method, err)
 	}
 }
 

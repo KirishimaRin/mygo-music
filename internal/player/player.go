@@ -1,6 +1,7 @@
 package player
 
 import (
+	"context"
 	"errors"
 	"math"
 	"math/rand/v2"
@@ -32,6 +33,11 @@ type Player struct {
 	Quiet func(func())
 	// Source finds the source of an ID, or nil if it's gone.
 	Source func(id string) music.Source
+	// ObservePlay queues a play's start and returns how to queue its end,
+	// or nil if nobody is observing it.
+	ObservePlay func(music.Track) func(time.Duration, music.EndReason)
+	// DrainObservers finishes queued observations within the quit budget.
+	DrainObservers func(context.Context)
 	// Failed, if set, hears that a source said the listener has something to
 	// do first: ErrSignIn or ErrSetup.
 	Failed func(source string, err error)
@@ -98,11 +104,13 @@ type Player struct {
 
 	recorded string // the track last told its source it played
 
-	// A play of the current track under way, for its source to hear how much
-	// of it was heard (heard.go): heard so far, to mark.
-	listening bool
-	heard     time.Duration
-	mark      time.Duration
+	// A play of the current track under way, for its source and observers
+	// to hear how much of it was heard (heard.go): heard so far, to mark.
+	playBegan  bool
+	observeEnd func(time.Duration, music.EndReason)
+	listening  bool
+	heard      time.Duration
+	mark       time.Duration
 
 	ahead *ahead // the next track's audio, asked for before its turn
 }

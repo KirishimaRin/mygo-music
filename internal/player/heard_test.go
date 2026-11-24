@@ -200,3 +200,41 @@ func TestNoCountWithoutPlayEnded(t *testing.T) {
 		t.Error("counting for a source without playEnded")
 	}
 }
+
+// An observer gets each play and the actual time heard even if its source
+// doesn't implement the playEnded capability.
+func TestObserverCountsPlaybackWithoutSourceEnd(t *testing.T) {
+	r := newRemoteRig(t, 2)
+	var starts []string
+	var ends []ending
+	r.p.ObservePlay = func(track music.Track) func(time.Duration, music.EndReason) {
+		starts = append(starts, track.ID)
+		return func(heard time.Duration, why music.EndReason) {
+			ends = append(ends, ending{track.ID, heard, why})
+		}
+	}
+	r.p.TogglePlay()
+	r.await("pause")
+	r.p.TogglePlay()
+	r.await("resume")
+	r.p.Next()
+	r.await("play")
+	r.settle()
+	r.now = r.now.Add(10 * time.Second)
+	r.p.Seek(45 * time.Second)
+	r.await("seek")
+	r.now = r.now.Add(2 * time.Second)
+	r.p.TogglePlay()
+	r.await("pause")
+	r.now = r.now.Add(time.Minute)
+	r.p.TogglePlay()
+	r.await("resume")
+	r.now = r.now.Add(time.Second)
+	r.p.Quit()
+	if len(starts) != 1 || starts[0] != "b" {
+		t.Fatalf("starts %v, want just b", starts)
+	}
+	if want := (ending{"b", 13 * time.Second, music.EndQuit}); len(ends) != 1 || ends[0] != want {
+		t.Fatalf("ends %v, want %v", ends, want)
+	}
+}

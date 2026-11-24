@@ -21,6 +21,7 @@
 package plugin
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -128,9 +129,10 @@ type Manifest struct {
 	Main string `json:"main,omitempty"`
 	// MinAppVersion is the oldest version of the app the plugin works with,
 	// such as 0.1.8. An older one won't install it, or load it.
-	MinAppVersion  string           `json:"minAppVersion,omitempty"`
-	Permissions    Permissions      `json:"permissions"`
-	RequestHeaders []RequestHeaders `json:"requestHeaders,omitempty"`
+	MinAppVersion   string           `json:"minAppVersion,omitempty"`
+	Permissions     Permissions      `json:"permissions"`
+	RequestHeaders  []RequestHeaders `json:"requestHeaders,omitempty"`
+	ObservePlayback bool             `json:"observePlayback,omitempty"`
 }
 
 // appVersion is the app's version, which the app sets. With none, as when
@@ -415,12 +417,15 @@ var helperScript = func() *moejs.Script {
 }()
 
 // running is the plugin's runtime, started if it isn't.
-func (p *Plugin) running() (*vm, error) {
+func (p *Plugin) running(ctx context.Context) (*vm, error) {
 	if v := p.current(); v != nil {
 		return v, nil
 	}
 	p.starting.Lock()
 	defer p.starting.Unlock()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if v := p.current(); v != nil {
 		return v, nil
 	}
@@ -579,10 +584,17 @@ func (p *Plugin) call(method string, params, out any) error {
 }
 
 func (p *Plugin) callWithin(timeout time.Duration, method string, params, out any) error {
+	return p.callContext(context.Background(), timeout, method, params, out)
+}
+
+func (p *Plugin) callContext(ctx context.Context, timeout time.Duration, method string, params, out any) error {
 	if !p.exports[method] {
 		return music.ErrUnsupported
 	}
-	v, err := p.running()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	v, err := p.running(ctx)
 	if err != nil {
 		return err
 	}
@@ -594,7 +606,9 @@ func (p *Plugin) callWithin(timeout time.Duration, method string, params, out an
 	}
 	ch := make(chan answer, 1)
 	if !v.loop.RunOnLoop(func(*moejs.Runtime) {
-		v.ask(method, encoded, func(a answer) { ch <- a })
+		if ctx.Err() == nil {
+			v.ask(method, encoded, func(a answer) { ch <- a })
+		}
 	}) {
 		p.drop(v)
 		return fmt.Errorf("the plugin stopped; try again")
@@ -602,6 +616,8 @@ func (p *Plugin) callWithin(timeout time.Duration, method string, params, out an
 	timer := time.NewTimer(timeout)
 	defer timer.Stop()
 	select {
+	case <-ctx.Done():
+		return ctx.Err()
 	case a := <-ch:
 		if a.err != nil {
 			return a.err

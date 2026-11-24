@@ -272,13 +272,16 @@ func (a *app) pluginInstalled(id string) error {
 	}
 	old := a.allLibs[at]
 	a.allLibs[at] = lib
-	if was := pluginOf(old); was != nil {
+	was := pluginOf(old)
+	if was != nil {
 		a.plugins = slices.DeleteFunc(a.plugins, func(q *plugin.Plugin) bool { return q == was })
-		// Its code is gone from under it: it stops, and the new one starts.
-		go was.Close()
 	}
 	a.plugins = append(a.plugins, p)
 	a.enabledChanged()
+	if was != nil {
+		// Its code is gone from under it: it stops, and the new one starts.
+		go was.Close()
+	}
 	if a.library == old {
 		a.library = lib
 		a.startLibrary(lib)

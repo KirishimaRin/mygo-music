@@ -23,3 +23,16 @@ The banner shows the station's `imageUrl`, or else its `icon`, one of the names 
 | `playEnded` | `{id, seconds, reason}`, where `reason` is `ended`, `skipped`, `stopped` or `quit` | |
 
 `played` is called once as each play of a song starts, and `playEnded` once as it ends: `seconds` is how much of it was heard, without the time it was paused or waited for its audio, or what a seek jumped over, and with what a seek back played again. `reason` is `ended` once it played to its end, `skipped` once something else plays, or the same song again, `stopped` once a remote plugin's song stopped at the other end, and `quit` as the app quits, which waits up to two seconds for the plugin to answer. Played again, a song is a new play, counted from nothing. A remote plugin's position is the app's guess from the clock and `remoteState`, so its `seconds` are only as close as that.
+
+## Observing playback from any source
+
+Set `"observePlayback": true` in `plugin.json` and export either or both callbacks.
+
+| Function | Parameters |
+| --- | --- |
+| `observePlayed` | `{id, source, name}` |
+| `observeEnded` | `{id, source, name, seconds, reason}` |
+
+`source` is the ID of the source that plays the track, including the built-in local source. `id` is the track ID in that source. `seconds` uses the same calculation as `playEnded` and is rounded to a tenth of a second. Observers receive callbacks in playback order and can return promises.
+
+Enabling an observer starts delivery with the next play. Disabling it drops queued events. At exit, the source and observers share one two-second wait budget.

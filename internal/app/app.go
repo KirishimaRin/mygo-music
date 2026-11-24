@@ -74,6 +74,8 @@ type app struct {
 	headers *headerPlugins // the plugins on, for the headers of their pictures
 	allLibs []*library     // every plugin, on or off; libs are those on
 
+	playbackObservers map[*plugin.Plugin]*playbackObserver
+
 	wasBehind bool // the window wasn't at the front as last built
 
 	captions  captionState    // the episode playing's captions, and the model they take
@@ -280,6 +282,7 @@ func (a *app) enabledChanged() {
 		}
 		a.headers.set(on)
 	}
+	a.syncPlaybackObservers()
 }
 
 // setPluginEnabled turns a plugin on or off. Off, it stops, its pages go, and if
@@ -355,6 +358,7 @@ func Run() error {
 		a.pl = player.New(a.post)
 		a.pl.Quiet = func(fn func()) { mygo.RunOnMain(fn) }
 		a.pl.Source = a.sourceByID
+		a.syncPlaybackObservers()
 		a.pl.Failed = a.sourceFailed
 		a.pl.Quality = func() string { return a.settings.Quality }
 		a.pl.Normalize = func() bool { return a.settings.Normalize }

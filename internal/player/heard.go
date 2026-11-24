@@ -1,6 +1,7 @@
 package player
 
 import (
+	"context"
 	"time"
 
 	"mygo-music/internal/music"
@@ -17,14 +18,20 @@ import (
 // ended.
 const quitWait = 2 * time.Second
 
-// listen starts a play of the current track as it starts to play, unless one
-// is under way or its source doesn't want to know.
+// listen starts a play of the current track, counting what is heard when
+// its source or an observer wants to know.
 func (p *Player) listen() {
 	if p.listening || p.track == nil || !p.playing {
 		return
 	}
+	if !p.playBegan {
+		p.playBegan = true
+		if p.ObservePlay != nil {
+			p.observeEnd = p.ObservePlay(*p.track)
+		}
+	}
 	src := p.sourceOf(p.track)
-	if _, ok := src.(music.PlayEnder); !ok || !src.Can("playEnded") {
+	if _, ok := src.(music.PlayEnder); p.observeEnd == nil && (!ok || !src.Can("playEnded")) {
 		return
 	}
 	p.listening, p.heard, p.mark = true, 0, p.Position()
@@ -46,17 +53,23 @@ func (p *Player) heardTo(pos time.Duration) {
 	p.mark = pos
 }
 
-// endPlay ends the play under way at pos, and tells its source on a goroutine
-// how much of it was heard and why it ended: done closes once it's been told.
+// endPlay settles the play under way and queues its observation. The returned
+// channel, if any, closes once the source has heard about its own play.
 func (p *Player) endPlay(why music.EndReason, pos time.Duration) (done chan struct{}) {
+	p.playBegan = false
 	if !p.listening {
 		return nil
 	}
 	p.listening = false
 	p.heardTo(pos)
+	if p.observeEnd != nil {
+		p.observeEnd(p.heard, why)
+		p.observeEnd = nil
+	}
 	// Its source as it is now: one taken out meanwhile isn't told.
-	src, ok := p.sourceOf(p.track).(music.PlayEnder)
-	if !ok {
+	source := p.sourceOf(p.track)
+	src, ok := source.(music.PlayEnder)
+	if !ok || !source.Can("playEnded") {
 		return nil
 	}
 	t, heard := *p.track, p.heard
@@ -68,13 +81,22 @@ func (p *Player) endPlay(why music.EndReason, pos time.Duration) (done chan stru
 	return done
 }
 
-// Quit ends the play under way as the app quits, waiting a little for its
-// source to hear of it, before the app closes the source.
+// Quit ends the current play and gives its source and observers one budget
+// to finish before the app closes the plugins.
 func (p *Player) Quit() {
-	if done := p.endPlay(music.EndQuit, p.Position()); done != nil {
+	done := p.endPlay(music.EndQuit, p.Position())
+	if done == nil && p.DrainObservers == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), quitWait)
+	defer cancel()
+	if done != nil {
 		select {
 		case <-done:
-		case <-time.After(quitWait):
+		case <-ctx.Done():
 		}
+	}
+	if p.DrainObservers != nil {
+		p.DrainObservers(ctx)
 	}
 }
