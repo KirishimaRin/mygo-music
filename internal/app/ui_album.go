@@ -132,53 +132,12 @@ func (a *app) toggleAlbumSaved(lib *library, d *albumData) {
 				return
 			}
 			// Their page lists it, or doesn't, once it loads anew.
-			lib.resetSavedAlbums()
+			lib.savedAlbums, lib.savedAlbumsPaged = nil, paged{}
 			if a.route.page == pageSavedAlbums && a.route.src == lib.id {
 				a.loadSavedAlbums(lib)
 			}
 		})
 	}()
-}
-
-func (lib *library) resetSavedAlbums() {
-	lib.savedAlbums, lib.savedAlbumsPaged = nil, paged{}
-	lib.savedAlbumsGeneration++
-}
-
-func (a *app) savedAlbumsSidebar(c *ui.Context) {
-	lib := a.library
-	if !lib.can("savedAlbums") || lib.signedOut() || lib.accountUnknown() {
-		return
-	}
-	for _, item := range lib.src.Info().Navigation {
-		if item.Builtin != "savedAlbums" || !item.SidebarList {
-			continue
-		}
-		c = c.Key("saved-albums")
-		a.sidebarDisclosure(c, a.builtinTitle("savedAlbums"), &a.savedAlbumsCollapsed, nil)
-		if a.savedAlbumsCollapsed {
-			return
-		}
-		pg := &lib.savedAlbumsPaged
-		if !pg.loaded && pg.err == "" {
-			a.loadSavedAlbums(lib)
-		}
-		for _, album := range lib.savedAlbums[:min(20, len(lib.savedAlbums))] {
-			a.sidebarCollectionRow(c.Key(album.ID), album.Name, album.ImageURL, route{page: pageAlbum, id: album.ID})
-		}
-		if pg.loading && !pg.loaded {
-			ui.Text(c, T("Loading…")).FontSize(12).TextColor(a.pal.muted).Margin(0, 8)
-		} else if pg.err != "" && !pg.loaded {
-			if ui.Button(c.Key("retry"), T("Retry")).Clicked() {
-				a.loadSavedAlbums(lib)
-			}
-		} else if len(lib.savedAlbums) > 0 {
-			a.navItem(c.Key("all"), iconAlbum, T("See All"), route{page: pageSavedAlbums})
-		} else if pg.loaded && len(lib.savedAlbums) == 0 {
-			ui.Text(c, T("Albums you save will show here")).FontSize(12).TextColor(a.pal.muted).Margin(0, 8)
-		}
-		return
-	}
 }
 
 // loadSavedAlbums loads the next page of the albums the listener saved.
@@ -187,13 +146,10 @@ func (a *app) loadSavedAlbums(lib *library) {
 		return
 	}
 	lib.savedAlbumsPaged.loading, lib.savedAlbumsPaged.err = true, ""
-	offset, generation := len(lib.savedAlbums), lib.savedAlbumsGeneration
+	offset := len(lib.savedAlbums)
 	go func() {
 		page, err := answered(lib.src.SavedAlbums(offset))
 		a.post(func() {
-			if lib.savedAlbumsGeneration != generation {
-				return
-			}
 			lib.savedAlbumsPaged.loading = false
 			if err != nil {
 				lib.savedAlbumsPaged.err = a.problem(lib, err, T("Couldn't load your albums"))

@@ -289,8 +289,6 @@ func (a *app) nowPlayingBody(c *ui.Context, tr *music.Track, art *artwork, accen
 	// An episode has what it is about and its captions in place of lyrics; a
 	// song, lyrics in place of those. Comments are for a source that has them.
 	switch episode := tr.ShowID != ""; {
-	case episode && a.npPane == paneWiki:
-		a.npPane = paneShow
 	case episode && a.npPane == paneWall:
 		a.npPane = paneQueue
 	case episode && (a.npPane == paneLyrics || a.npPane == paneStage):
@@ -301,9 +299,6 @@ func (a *app) nowPlayingBody(c *ui.Context, tr *music.Track, art *artwork, accen
 	case episode && a.npPane == paneCaptions && !a.captionsShown():
 		a.npPane = paneShow
 	case !episode && (a.npPane == paneShow || a.npPane == paneCaptions):
-		a.npPane = a.lyricsPaneChosen()
-	}
-	if a.npPane == paneWiki && !a.trackLib(tr).can("songWiki") {
 		a.npPane = a.lyricsPaneChosen()
 	}
 	if a.npPane == paneComments && !a.trackLib(tr).can("comments") {
@@ -415,8 +410,6 @@ func (a *app) nowPlayingBody(c *ui.Context, tr *music.Track, art *artwork, accen
 					a.lyricsPane(c, tr, h)
 				case paneComments:
 					a.commentsPane(c, tr)
-				case paneWiki:
-					a.wikiPane(c, tr)
 				case paneShow:
 					a.showPane(c, tr)
 				case paneCaptions:
@@ -485,7 +478,6 @@ const (
 	paneShow
 	paneCaptions
 	paneWall
-	paneWiki
 )
 
 // npTab is a tab of Now Playing: its pane, and what it says.
@@ -510,9 +502,6 @@ func (a *app) npTabs() []npTab {
 	}
 	if tr != nil && a.trackLib(tr).can("comments") {
 		tabs = append(tabs, npTab{paneComments, T("Comments")})
-	}
-	if tr != nil && tr.ShowID == "" && a.trackLib(tr).can("songWiki") {
-		tabs = append(tabs, npTab{paneWiki, T("Encyclopedia")})
 	}
 	return tabs
 }

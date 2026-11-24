@@ -89,26 +89,6 @@ func (p *Plugin) Browse(page string) (*music.Browse, error) {
 	return &b, nil
 }
 
-func (p *Plugin) CloudTracks(offset int, query string) (*music.CloudPage, error) {
-	var page music.CloudPage
-	if err := p.call("cloudTracks", map[string]any{"offset": offset, "query": query}, &page); err != nil {
-		return nil, err
-	}
-	p.stamp(page.Tracks)
-	return &page, nil
-}
-
-func (p *Plugin) SongWiki(trackID string) (*music.SongWiki, error) {
-	var wiki music.SongWiki
-	if err := p.call("songWiki", map[string]string{"trackId": trackID}, &wiki); err != nil {
-		return nil, err
-	}
-	for i := range wiki.Sections {
-		p.stamp(wiki.Sections[i].Tracks)
-	}
-	return &wiki, nil
-}
-
 func (p *Plugin) Playlists() ([]music.Playlist, error) {
 	var ps []music.Playlist
 	if err := p.call("playlists", nil, &ps); err != nil {

@@ -36,16 +36,3 @@ Set `"observePlayback": true` in `plugin.json` and export either or both callbac
 `source` is the ID of the source that plays the track, including the built-in local source. `id` is the track ID in that source. `seconds` uses the same calculation as `playEnded` and is rounded to a tenth of a second. Observers receive callbacks in playback order and can return promises.
 
 Enabling an observer starts delivery with the next play. Disabling it drops queued events. At exit, the source and observers share one two-second wait budget.
-
-## Personal library and song encyclopedia
-
-| Function | Parameters | Returns |
-| --- | --- | --- |
-| `cloudTracks` | `{offset, query}` | `{tracks, next}` |
-| `songWiki` | `{trackId}` | `{sections}` |
-
-A navigation entry with `view: "cloudTracks"` opens the paged library with a search field. Its `page` remains the browse fallback for older apps. `next` is the next offset into the source's library, even when the current page has no matches. Zero ends the list.
-
-A `savedAlbums` navigation entry with `sidebarList: true` opens the saved albums as a disclosure below saved playlists. Its rows open the albums. See All opens the full saved album page.
-
-A source exporting `songWiki` gets an Encyclopedia tab for songs in Now Playing. Each section has a `title` and may include `description`, `tracks` and `entries`. An entry has `title` and may include `subtitle`, `text`, `imageUrl` and a destination (`artistId`, `playlistId`, `showId` or `url`). Set `style` to `tag` for chips grouped by subtitle or `fact` for a label and a value.
