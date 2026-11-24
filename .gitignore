@@ -2,4 +2,7 @@
 /.mygo/
 mygo_windows_*.syso
 /mygo-music
+/mygo-music.exe
 /node_modules/
+/HANDOFF.MD
+/research/
